@@ -6,7 +6,7 @@ import {
   TrendingUp, TrendingDown, Bell, Truck,
   CheckCircle, AlertCircle, ShoppingBag, UserCheck,
   List, Tag, Trash2, Edit, Save, XCircle, ChevronRight, MoreHorizontal, Phone, MapPin, Calendar, Wallet,
-  Eye, Check, Image as ImageIcon, Globe
+  Eye, Check, Image as ImageIcon, Globe, History
 } from 'lucide-react';
 
 // --- STYLES FOR ANIMATIONS ---
@@ -198,6 +198,7 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggleSidebar }) => {
       section: 'OPERASIONAL', items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'pos', label: 'Kasir (POS)', icon: ShoppingBag },
+        { id: 'pos-history', label: 'Riwayat POS', icon: History },
         { id: 'purchase', label: 'Pembelian (Stok)', icon: Truck },
       ]
     },
@@ -643,6 +644,24 @@ const POSView = ({ products, setProducts, setTransactions, setOrders, notify, as
     setCart(cart.filter(x => x.id !== id));
   };
 
+  const updateQty = (id, newQty) => {
+    const qty = parseInt(newQty);
+    if (isNaN(qty) || qty < 1) return;
+
+    setCart(prev => prev.map(item => {
+      if (item.id === id) {
+        // Check stock
+        const product = products.find(p => p.id === id);
+        if (qty > product.stock) {
+          notify(`Stok ${product.name} tidak mencukupi!`, "error");
+          return item;
+        }
+        return { ...item, qty };
+      }
+      return item;
+    }));
+  };
+
   const handleCheckout = () => {
     if (cart.length === 0) return;
     const total = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
@@ -661,6 +680,7 @@ const POSView = ({ products, setProducts, setTransactions, setOrders, notify, as
         status: "Done",
         paymentStatus: "Lunas",
         method: paymentMethod,
+        source: 'POS',
         items: cart
       };
 
@@ -685,6 +705,8 @@ const POSView = ({ products, setProducts, setTransactions, setOrders, notify, as
       setCart([]);
       setAmountPaid('');
       notify("Transaksi Berhasil!", "success");
+      // Trigger invoice after success
+      onCheckoutSuccess(newOrder);
     });
   };
 
@@ -756,7 +778,12 @@ const POSView = ({ products, setProducts, setTransactions, setOrders, notify, as
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 rounded font-medium">{item.qty}x</span>
+                    <input
+                      type="number"
+                      value={item.qty}
+                      onChange={(e) => updateQty(item.id, e.target.value)}
+                      className="w-12 h-7 text-xs border border-slate-200 rounded text-center focus:ring-1 focus:ring-emerald-500 outline-none"
+                    />
                     <span className="text-xs text-slate-500">@ {formatRupiah(item.price)}</span>
                   </div>
                 </div>
@@ -829,6 +856,71 @@ const POSView = ({ products, setProducts, setTransactions, setOrders, notify, as
       </div>
     </div>
   );
+};
+
+// --- REUSABLE COMPONENTS ---
+
+const PeriodFilter = ({ period, setPeriod, date, setDate }) => {
+  return (
+    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+      <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
+        <Calendar size={14} /> Periode Laporan
+      </div>
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex bg-slate-100 p-1 rounded-xl h-fit">
+          {['HARI', 'BULAN', 'TAHUN'].map(p => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-6 py-2 rounded-lg text-[10px] font-bold transition-all ${period === p ? 'bg-white text-rose-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1">
+          <input
+            type={period === 'HARI' ? 'date' : period === 'BULAN' ? 'month' : 'number'}
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            placeholder={period === 'TAHUN' ? 'Tulis Tahun (ex: 2024)' : ''}
+            className="w-full pl-4 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const exportToExcel = (data, filename = 'laporan.csv') => {
+  if (!data || !data.length) return;
+  const headers = Object.keys(data[0]).join(',');
+  const rows = data.map(obj => Object.values(obj).map(val => `"${val}"`).join(','));
+  const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const filterDataByPeriod = (data, period, date) => {
+  if (!date) return data;
+  return data.filter(item => {
+    const itemDate = new Date(item.date);
+    if (!item.date) return false;
+    if (period === 'HARI') {
+      return item.date === date;
+    } else if (period === 'BULAN') {
+      const [year, month] = date.split('-');
+      return itemDate.getFullYear() === parseInt(year) && (itemDate.getMonth() + 1) === parseInt(month);
+    } else if (period === 'TAHUN') {
+      return itemDate.getFullYear() === parseInt(date);
+    }
+    return true;
+  });
 };
 
 // 5. Category View (Functional)
@@ -974,7 +1066,10 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
-  const [filterPeriod, setFilterPeriod] = useState("Semua");
+  const [filterPeriod, setFilterPeriod] = useState("HARI");
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const filteredOrders = filterDataByPeriod(orders, filterPeriod, filterDate);
 
   const updateStatus = (id, newStatus) => {
     setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
@@ -998,26 +1093,25 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
-      <h2 className="text-2xl font-bold text-slate-800">Manajemen Pesanan</h2>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap gap-4 items-center">
-        <div className="flex gap-2 items-center text-sm font-medium text-slate-500 mr-2">
-          <Filter size={16} /> Filter Periode:
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Manajemen Pesanan</h2>
+          <p className="text-slate-500 text-sm">Kelola dan proses pesanan yang masuk.</p>
         </div>
-        {["Semua", "Hari Ini", "Minggu Ini", "Bulan Ini"].map(p => (
-          <button
-            key={p}
-            onClick={() => setFilterPeriod(p)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${filterPeriod === p ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-          >
-            {p}
-          </button>
-        ))}
-        <div className="ml-auto flex gap-2">
-          <button className="flex items-center gap-2 text-slate-500 hover:text-slate-800 text-sm font-medium"><Printer size={16} /> Export Data</button>
-        </div>
+        <button
+          onClick={() => exportToExcel(filteredOrders, 'laporan-pesanan.csv')}
+          className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors shadow-sm"
+        >
+          <Printer size={18} /> Export Excel
+        </button>
       </div>
+
+      <PeriodFilter
+        period={filterPeriod}
+        setPeriod={setFilterPeriod}
+        date={filterDate}
+        setDate={setFilterDate}
+      />
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -1034,7 +1128,7 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {orders.map((order) => (
+              {filteredOrders.map((order) => (
                 <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-6 py-4">
                     <div className="font-bold text-emerald-600">{order.id}</div>
@@ -1203,7 +1297,11 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
 // 8. Finance View (Updated with Transaction Form)
 const FinanceView = ({ transactions, setTransactions, notify }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [filterPeriod, setFilterPeriod] = useState("HARI");
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTrx, setNewTrx] = useState({ type: 'Keluar', amount: '', category: '', note: '', date: new Date().toISOString().split('T')[0] });
+
+  const filteredTransactions = filterDataByPeriod(transactions, filterPeriod, filterDate);
 
   const handleAddTrx = () => {
     if (!newTrx.amount || !newTrx.category || !newTrx.note) return notify("Mohon lengkapi semua data transaksi", "error");
@@ -1221,18 +1319,33 @@ const FinanceView = ({ transactions, setTransactions, notify }) => {
     setNewTrx({ type: 'Keluar', amount: '', category: '', note: '', date: new Date().toISOString().split('T')[0] });
   };
 
-  const income = transactions.filter(t => t.type === 'Masuk').reduce((a, b) => a + b.amount, 0);
-  const expense = transactions.filter(t => t.type === 'Keluar').reduce((a, b) => a + b.amount, 0);
+  const income = filteredTransactions.filter(t => t.type === 'Masuk').reduce((a, b) => a + b.amount, 0);
+  const expense = filteredTransactions.filter(t => t.type === 'Keluar').reduce((a, b) => a + b.amount, 0);
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-800">Laporan Keuangan</h2>
-        <button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-slate-700 flex items-center gap-2 shadow-lg shadow-slate-200 transition-all">
-          {isFormOpen ? <X size={18} /> : <Plus size={18} />}
-          {isFormOpen ? 'Tutup Form' : 'Catat Transaksi'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => exportToExcel(filteredTransactions, 'laporan-keuangan.csv')}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <Printer size={18} /> Export Excel
+          </button>
+          <button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-slate-700 flex items-center gap-2 shadow-lg shadow-slate-200 transition-all">
+            {isFormOpen ? <X size={18} /> : <Plus size={18} />}
+            {isFormOpen ? 'Tutup Form' : 'Catat Transaksi'}
+          </button>
+        </div>
       </div>
+
+      <PeriodFilter
+        period={filterPeriod}
+        setPeriod={setFilterPeriod}
+        date={filterDate}
+        setDate={setFilterDate}
+      />
 
       {isFormOpen && (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 animate-fade-in">
@@ -1329,7 +1442,7 @@ const FinanceView = ({ transactions, setTransactions, notify }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {transactions.map((trx, i) => (
+              {filteredTransactions.map((trx, i) => (
                 <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap font-mono text-xs">{trx.date}</td>
                   <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-medium ${trx.type === 'Masuk' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{trx.category}</span></td>
@@ -1491,7 +1604,270 @@ const CustomerView = ({ customers }) => {
   )
 };
 
-// 11. Settings View (Functional Placeholder)
+// 11. Invoice Modal (NEW)
+const InvoiceModal = ({ order, isOpen, onClose, formatRupiah }) => {
+  if (!isOpen || !order) return null;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto print:bg-white print:p-0">
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-fade-in print:shadow-none print:w-full print:max-w-none">
+        <div className="p-8 space-y-6">
+          {/* Header */}
+          <div className="text-center space-y-1">
+            <h2 className="text-2xl font-bold text-slate-800">KOPERASI BERGAS</h2>
+            <p className="text-sm text-slate-500">Jl. Jend. Sudirman No. 45, Semarang</p>
+            <p className="text-sm text-slate-500">Telp: 0812-3456-7890</p>
+          </div>
+
+          <div className="border-t border-b border-dashed border-slate-200 py-4 flex justify-between text-sm">
+            <div>
+              <p className="text-slate-400">Invoice:</p>
+              <p className="font-bold">{order.id}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-slate-400">Tanggal:</p>
+              <p className="font-bold">{order.date}</p>
+            </div>
+          </div>
+
+          {/* Items */}
+          <table className="w-full text-sm">
+            <thead className="text-slate-400 border-b border-slate-100">
+              <tr>
+                <th className="text-left py-2 font-medium">Item</th>
+                <th className="text-center py-2 font-medium">Qty</th>
+                <th className="text-right py-2 font-medium">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {order.items.map((item, i) => (
+                <tr key={i}>
+                  <td className="py-3 text-slate-700 font-medium">{item.name}</td>
+                  <td className="py-3 text-center">{item.qty}</td>
+                  <td className="py-3 text-right font-bold">{formatRupiah(item.price * item.qty)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Footer Totals */}
+          <div className="border-t border-dashed border-slate-200 pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Subtotal</span>
+              <span className="font-bold">{formatRupiah(order.total)}</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold border-t border-slate-100 pt-2">
+              <span>TOTAL</span>
+              <span className="text-emerald-600">{formatRupiah(order.total)}</span>
+            </div>
+            <div className="flex justify-between text-sm text-slate-500 pt-2 border-t border-slate-100">
+              <span>Bayar ({order.method})</span>
+              <span>{formatRupiah(order.amountPaid || order.total)}</span>
+            </div>
+            {order.debt > 0 && (
+              <div className="flex justify-between text-sm text-rose-500 font-bold">
+                <span>Kurang Bayar</span>
+                <span>{formatRupiah(order.debt)}</span>
+              </div>
+            )}
+            {order.change > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600 font-bold">
+                <span>Kembalian</span>
+                <span>{formatRupiah(order.change)}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="text-center pt-4">
+            <p className="text-sm font-bold text-slate-800 italic">Terima Kasih Atas Kunjungan Anda!</p>
+          </div>
+        </div>
+
+        {/* Modal Actions */}
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3 rounded-b-3xl print:hidden">
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-all">Tutup</button>
+          <button onClick={handlePrint} className="flex-1 py-3 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-900 flex items-center justify-center gap-2 shadow-lg shadow-slate-200 transition-all">
+            <Printer size={18} /> Cetak Struk
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 12. POS History View
+const POSHistoryView = ({ orders, setOrders, formatRupiah, getStatusColor, onPrintInvoice }) => {
+  const [filterPeriod, setFilterPeriod] = useState("HARI");
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const posOrders = orders.filter(o => o.source === 'POS' || o.customer === 'Walk-in Customer');
+  const filteredOrders = filterDataByPeriod(posOrders, filterPeriod, filterDate);
+
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [payAmount, setPayAmount] = useState('');
+
+  const handleUpdatePayment = () => {
+    const amount = parseFloat(payAmount);
+    if (isNaN(amount) || amount <= 0) return;
+
+    const updatedOrders = orders.map(o => {
+      if (o.id === selectedOrder.id) {
+        const newDebt = Math.max(0, o.debt - amount);
+        const newPaid = o.amountPaid + amount;
+        return {
+          ...o,
+          amountPaid: newPaid,
+          debt: newDebt,
+          paymentStatus: newDebt === 0 ? 'Lunas' : 'Belum Lunas'
+        };
+      }
+      return o;
+    });
+
+    setOrders(updatedOrders);
+    setIsPayModalOpen(false);
+    setPayAmount('');
+    setSelectedOrder(null);
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Riwayat Transaksi POS</h2>
+          <p className="text-slate-500 text-sm">Daftar semua transaksi yang dilakukan melalui kasir.</p>
+        </div>
+        <button
+          onClick={() => exportToExcel(filteredOrders, 'riwayat-pos.csv')}
+          className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors shadow-sm"
+        >
+          <Printer size={18} /> Export Excel
+        </button>
+      </div>
+
+      <PeriodFilter
+        period={filterPeriod}
+        setPeriod={setFilterPeriod}
+        date={filterDate}
+        setDate={setFilterDate}
+      />
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input type="text" placeholder="Cari No. Invoice..." className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-600">
+            <thead className="bg-slate-50 text-slate-500 uppercase font-bold tracking-wider text-xs">
+              <tr>
+                <th className="px-6 py-4">No. Invoice</th>
+                <th className="px-6 py-4">Tanggal</th>
+                <th className="px-6 py-4">Metode</th>
+                <th className="px-6 py-4">Total</th>
+                <th className="px-6 py-4">Hutang</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-6 py-10 text-center text-slate-400">Belum ada transaksi POS</td>
+                </tr>
+              ) : (
+                filteredOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-4 font-bold text-emerald-600">{order.id}</td>
+                    <td className="px-6 py-4">{order.date}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600 font-medium">{order.method}</span>
+                    </td>
+                    <td className="px-6 py-4 font-bold text-slate-800">{formatRupiah(order.total)}</td>
+                    <td className="px-6 py-4 font-bold text-rose-500">{order.debt > 0 ? formatRupiah(order.debt) : '-'}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${order.debt > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                        {order.debt > 0 ? 'Belum Lunas' : 'Lunas'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end items-center gap-2">
+                        {order.debt > 0 && (
+                          <button
+                            onClick={() => { setSelectedOrder(order); setIsPayModalOpen(true); }}
+                            className="text-xs font-bold text-white bg-emerald-600 px-3 py-1 rounded-lg hover:bg-emerald-700 transition-colors"
+                          >
+                            Bayar
+                          </button>
+                        )}
+                        <button onClick={() => onPrintInvoice(order)} className="text-slate-400 hover:text-emerald-600 transition-colors" title="Print Struk">
+                          <Printer size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {isPayModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-800">Pelunasan Hutang</h3>
+              <p className="text-sm text-slate-500">Invoice: {selectedOrder?.id}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100 flex justify-between items-center">
+                <span className="text-sm font-bold text-rose-700 uppercase">Sisa Hutang</span>
+                <span className="text-lg font-bold text-rose-700">{formatRupiah(selectedOrder?.debt)}</span>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Jumlah Bayar</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400 text-sm font-bold">Rp</span>
+                  <input
+                    type="number"
+                    value={payAmount}
+                    onChange={e => setPayAmount(e.target.value)}
+                    placeholder="0"
+                    className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white outline-none font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setIsPayModalOpen(false); setPayAmount(''); }}
+                className="py-3.5 rounded-2xl font-bold text-slate-600 hover:bg-slate-200 transition-all"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleUpdatePayment}
+                className="py-3.5 rounded-2xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 13. Settings View (Functional Placeholder)
 const SettingsView = () => (
   <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
     <h2 className="text-2xl font-bold text-slate-800">Pengaturan Aplikasi</h2>
@@ -1584,7 +1960,11 @@ const PaymentOptionsView = ({ accounts, setAccounts, askConfirm, notify }) => {
 // 13. Purchase View (NEW)
 const PurchaseView = ({ purchases, setPurchases, products, setProducts, notify }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [filterPeriod, setFilterPeriod] = useState("HARI");
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [newPurchase, setNewPurchase] = useState({ productId: '', supplier: '', qty: '', unitCost: '' });
+
+  const filteredPurchases = filterDataByPeriod(purchases, filterPeriod, filterDate);
 
   const handleAdd = () => {
     if (!newPurchase.productId || !newPurchase.qty || !newPurchase.unitCost) return;
@@ -1622,10 +2002,18 @@ const PurchaseView = ({ purchases, setPurchases, products, setProducts, notify }
           <h2 className="text-2xl font-bold text-slate-800">Pembelian & Stok Masuk</h2>
           <p className="text-slate-500 text-sm">Catat penambahan stok dari supplier.</p>
         </div>
-        <button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-slate-700 flex items-center gap-2">
-          {isFormOpen ? <X size={18} /> : <Plus size={18} />}
-          {isFormOpen ? 'Tutup Form' : 'Tambah Stok'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => exportToExcel(filteredPurchases, 'laporan-pembelian.csv')}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <Printer size={18} /> Export Excel
+          </button>
+          <button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-slate-700 flex items-center gap-2">
+            {isFormOpen ? <X size={18} /> : <Plus size={18} />}
+            {isFormOpen ? 'Tutup Form' : 'Tambah Stok'}
+          </button>
+        </div>
       </div>
 
       {isFormOpen && (
@@ -1663,6 +2051,13 @@ const PurchaseView = ({ purchases, setPurchases, products, setProducts, notify }
         </div>
       )}
 
+      <PeriodFilter
+        period={filterPeriod}
+        setPeriod={setFilterPeriod}
+        date={filterDate}
+        setDate={setFilterDate}
+      />
+
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <table className="w-full text-left text-sm text-slate-600">
           <thead className="bg-slate-50 text-slate-500 uppercase font-bold tracking-wider text-xs">
@@ -1676,7 +2071,7 @@ const PurchaseView = ({ purchases, setPurchases, products, setProducts, notify }
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {purchases.map(p => (
+            {filteredPurchases.map(p => (
               <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                 <td className="px-6 py-4">
                   <div className="font-bold text-slate-800">{p.id}</div>
@@ -1839,6 +2234,7 @@ const App = () => {
   const [purchases, setPurchases] = useState(INITIAL_PURCHASES);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
+  const [invoiceToPrint, setInvoiceToPrint] = useState(null);
 
   const notify = (message, type = 'success') => setToast({ show: true, message, type });
   const askConfirm = (message, onConfirm) => setConfirmModal({ show: true, message, onConfirm });
@@ -1847,7 +2243,8 @@ const App = () => {
     switch (activeTab) {
       case 'dashboard': return <DashboardView products={products} orders={orders} transactions={transactions} users={users} />;
       case 'products': return <ProductView products={products} setProducts={setProducts} categories={categories} notify={notify} askConfirm={askConfirm} />;
-      case 'pos': return <POSView products={products} setProducts={setProducts} setTransactions={setTransactions} setOrders={setOrders} notify={notify} askConfirm={askConfirm} />;
+      case 'pos': return <POSView products={products} setProducts={setProducts} setTransactions={setTransactions} setOrders={setOrders} notify={notify} askConfirm={askConfirm} onCheckoutSuccess={(order) => setInvoiceToPrint(order)} />;
+      case 'pos-history': return <POSHistoryView orders={orders} setOrders={setOrders} formatRupiah={formatRupiah} getStatusColor={getStatusColor} onPrintInvoice={(order) => setInvoiceToPrint(order)} />;
       case 'categories': return <CategoryView categories={categories} setCategories={setCategories} notify={notify} askConfirm={askConfirm} />;
       case 'promos': return <PromoView promos={promos} setPromos={setPromos} notify={notify} />;
       case 'orders': return <OrderView orders={orders} setOrders={setOrders} notify={notify} askConfirm={askConfirm} />;
@@ -1915,6 +2312,12 @@ const App = () => {
             onConfirm={() => { confirmModal.onConfirm(); setConfirmModal({ show: false, message: '', onConfirm: null }); }}
           />
         )}
+        <InvoiceModal
+          isOpen={!!invoiceToPrint}
+          order={invoiceToPrint}
+          onClose={() => setInvoiceToPrint(null)}
+          formatRupiah={formatRupiah}
+        />
       </div>
     </>
   );
