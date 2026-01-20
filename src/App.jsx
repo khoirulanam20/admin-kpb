@@ -49,13 +49,13 @@ const INITIAL_CATEGORIES = [
 ];
 
 const INITIAL_PRODUCTS = [
-  { id: 1, name: "Beras Premium Rojolele 5kg", category: "Sembako", subCategory: "Beras", price: 65000, stock: 50, sku: "BRS-001", isActive: true, isHighlight: true },
-  { id: 2, name: "Minyak Goreng Sunco 2L", category: "Sembako", subCategory: "Minyak", price: 38000, stock: 120, sku: "MNY-002", isActive: true, isHighlight: false },
-  { id: 3, name: "Gula Pasir Gulaku 1kg", category: "Sembako", subCategory: "Gula", price: 16000, stock: 200, sku: "GLA-003", isActive: true, isHighlight: false },
-  { id: 4, name: "Tepung Terigu Segitiga Biru 1kg", category: "Bahan Kue", subCategory: "Tepung", price: 12000, stock: 45, sku: "TPG-004", isActive: false, isHighlight: false },
-  { id: 5, name: "Telur Ayam Negeri (Tray)", category: "Sembako", subCategory: "Telur", price: 55000, stock: 15, sku: "TLR-005", isActive: true, isHighlight: true },
-  { id: 6, name: "Kopi Kapal Api Special (Mix)", category: "Minuman", subCategory: "Kopi", price: 15000, stock: 100, sku: "KOPI-006", isActive: true, isHighlight: false },
-  { id: 7, name: "Teh Sari Wangi (Kotak)", category: "Minuman", subCategory: "Teh", price: 8500, stock: 80, sku: "TEH-007", isActive: true, isHighlight: false },
+  { id: 1, name: "Beras Premium Rojolele 5kg", category: "Sembako", subCategory: "Beras", price: 65000, discount: 5, stock: 50, sku: "BRS-001", isActive: true, isHighlight: true },
+  { id: 2, name: "Minyak Goreng Sunco 2L", category: "Sembako", subCategory: "Minyak", price: 38000, discount: 0, stock: 120, sku: "MNY-002", isActive: true, isHighlight: false },
+  { id: 3, name: "Gula Pasir Gulaku 1kg", category: "Sembako", subCategory: "Gula", price: 16000, discount: 0, stock: 200, sku: "GLA-003", isActive: true, isHighlight: false },
+  { id: 4, name: "Tepung Terigu Segitiga Biru 1kg", category: "Bahan Kue", subCategory: "Tepung", price: 12000, discount: 10, stock: 45, sku: "TPG-004", isActive: false, isHighlight: false },
+  { id: 5, name: "Telur Ayam Negeri (Tray)", category: "Sembako", subCategory: "Telur", price: 55000, discount: 0, stock: 15, sku: "TLR-005", isActive: true, isHighlight: true },
+  { id: 6, name: "Kopi Kapal Api Special (Mix)", category: "Minuman", subCategory: "Kopi", price: 15000, discount: 0, stock: 100, sku: "KOPI-006", isActive: true, isHighlight: false },
+  { id: 7, name: "Teh Sari Wangi (Kotak)", category: "Minuman", subCategory: "Teh", price: 8500, discount: 0, stock: 80, sku: "TEH-007", isActive: true, isHighlight: false },
 ];
 
 const INITIAL_ORDERS = [
@@ -394,8 +394,8 @@ const DashboardView = ({ products, orders, transactions, users }) => {
 };
 
 // 3. Product View (Full CRUD)
-const ProductView = ({ products, setProducts, categories }) => {
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', category: '', subCategory: '', sku: '' });
+const ProductView = ({ products, setProducts, categories, notify, askConfirm }) => {
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', discount: 0, stock: '', category: '', subCategory: '', sku: '' });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
@@ -404,16 +404,17 @@ const ProductView = ({ products, setProducts, categories }) => {
   const editSubCategories = categories.find(c => c.name === editingProduct?.category)?.subCategories || [];
 
   const handleAdd = () => {
-    if (!newProduct.name || !newProduct.price) return alert("Nama dan Harga wajib diisi!");
+    if (!newProduct.name || !newProduct.price) return notify("Nama dan Harga wajib diisi!", "error");
     const product = {
       id: Date.now(),
       ...newProduct,
       price: parseInt(newProduct.price),
+      discount: parseInt(newProduct.discount) || 0,
       stock: parseInt(newProduct.stock) || 0,
       isActive: true
     };
     setProducts([...products, product]);
-    setNewProduct({ name: '', price: '', stock: '', category: '', subCategory: '', sku: '' });
+    setNewProduct({ name: '', price: '', discount: 0, stock: '', category: '', subCategory: '', sku: '' });
     setIsFormOpen(false);
   };
 
@@ -424,9 +425,10 @@ const ProductView = ({ products, setProducts, categories }) => {
   };
 
   const handleDelete = (id) => {
-    if (confirm("Hapus produk ini?")) {
+    askConfirm("Hapus produk ini?", () => {
       setProducts(products.filter(p => p.id !== id));
-    }
+      notify("Produk berhasil dihapus", "success");
+    });
   };
 
   const toggleStatus = (id) => {
@@ -480,6 +482,10 @@ const ProductView = ({ products, setProducts, categories }) => {
               </div>
             </div>
             <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500 uppercase">Diskon (%)</label>
+              <input type="number" value={newProduct.discount} onChange={e => setNewProduct({ ...newProduct, discount: e.target.value })} placeholder="0" className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
+            </div>
+            <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-500 uppercase">Stok Awal</label>
               <input type="number" value={newProduct.stock} onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })} placeholder="0" className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
             </div>
@@ -527,7 +533,17 @@ const ProductView = ({ products, setProducts, categories }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4"><span className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600 font-medium">{product.category}</span></td>
-                  <td className="px-6 py-4 font-bold text-slate-700">{formatRupiah(product.price)}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className={`font-bold ${product.discount > 0 ? 'text-rose-500 text-xs line-through' : 'text-slate-700'}`}>{formatRupiah(product.price)}</span>
+                      {product.discount > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-800">{formatRupiah(product.price * (1 - product.discount / 100))}</span>
+                          <span className="text-[10px] bg-rose-50 text-rose-600 px-1 rounded font-bold">-{product.discount}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <div className={`w-1.5 h-1.5 rounded-full ${product.stock < 20 ? 'bg-rose-500' : 'bg-emerald-500'}`}></div>
@@ -580,7 +596,11 @@ const ProductView = ({ products, setProducts, categories }) => {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">Harga Jual</label>
-                <input type="number" value={editingProduct.price} onChange={e => setEditingProduct({ ...editingProduct, price: parseInt(e.target.value) })} className="w-full border border-slate-200 p-3 rounded-xl outline-none" />
+                <input type="number" value={editingProduct.price} onChange={e => setEditingProduct({ ...editingProduct, price: parseInt(e.target.value) })} className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-500 uppercase">Diskon (%)</label>
+                <input type="number" value={editingProduct.discount} onChange={e => setEditingProduct({ ...editingProduct, discount: parseInt(e.target.value) || 0 })} className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase">Stok</label>
@@ -599,21 +619,23 @@ const ProductView = ({ products, setProducts, categories }) => {
 };
 
 // 4. POS View (Modernized)
-const POSView = ({ products, setProducts, setTransactions, setOrders }) => {
+const POSView = ({ products, setProducts, setTransactions, setOrders, notify, askConfirm }) => {
   const [cart, setCart] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [amountPaid, setAmountPaid] = useState('');
 
   const addToCart = (product) => {
-    if (!product.isActive || product.stock <= 0) return alert("Stok habis atau produk tidak aktif");
-    const exist = cart.find(x => x.id === product.id);
+    if (!product.isActive || product.stock <= 0) return notify("Stok habis atau produk tidak aktif", "error");
+
+    const effectivePrice = product.price * (1 - (product.discount || 0) / 100);
+    const exist = cart.find(item => item.id === product.id);
     const currentQtyInCart = exist ? exist.qty : 0;
-    if (currentQtyInCart + 1 > product.stock) return alert("Stok tidak mencukupi!");
+    if (currentQtyInCart + 1 > product.stock) return notify("Stok tidak mencukupi!", "error");
 
     if (exist) {
       setCart(cart.map(x => x.id === product.id ? { ...exist, qty: exist.qty + 1 } : x));
     } else {
-      setCart([...cart, { ...product, qty: 1 }]);
+      setCart([...cart, { ...product, price: effectivePrice, originalPrice: product.price, qty: 1 }]);
     }
   };
 
@@ -625,20 +647,11 @@ const POSView = ({ products, setProducts, setTransactions, setOrders }) => {
     if (cart.length === 0) return;
     const total = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
-    if (confirm(`Total ${formatRupiah(total)}. Proses Pembayaran?`)) {
-      const newTrx = {
-        id: `TRX-${Date.now()}`,
-        type: 'Masuk',
-        category: 'Penjualan POS',
-        amount: total,
-        date: new Date().toISOString().split('T')[0],
-        note: `Penjualan POS - ${cart.length} item`
-      };
-      setTransactions(prev => [newTrx, ...prev]);
-
+    askConfirm(`Total ${formatRupiah(total)}. Proses Pembayaran?`, () => {
+      const orderId = `INV-${Date.now().toString().slice(-8)}`;
       const newOrder = {
-        id: `POS-${Date.now()}`,
-        customer: "Walk-in Guest",
+        id: orderId,
+        customer: "Walk-in Customer",
         role: "Guest",
         date: new Date().toISOString().split('T')[0],
         total: total,
@@ -647,19 +660,32 @@ const POSView = ({ products, setProducts, setTransactions, setOrders }) => {
         debt: Math.max(0, total - (parseFloat(amountPaid) || 0)),
         status: "Done",
         paymentStatus: "Lunas",
-        method: paymentMethod
+        method: paymentMethod,
+        items: cart
       };
-      setOrders(prev => [newOrder, ...prev]);
 
+      setOrders(prev => [newOrder, ...prev]);
+      setTransactions(prev => [{
+        id: `TRX-${Date.now().toString().slice(-4)}`,
+        type: "Masuk",
+        category: "Penjualan",
+        amount: total,
+        date: new Date().toISOString().split('T')[0],
+        status: "Selesai",
+        method: paymentMethod,
+        note: `Penjualan POS ${orderId}`
+      }, ...prev]);
+
+      // Update Stock
       const updatedProducts = products.map(p => {
-        const inCart = cart.find(c => c.id === p.id);
-        if (inCart) return { ...p, stock: p.stock - inCart.qty };
-        return p;
+        const cartItem = cart.find(item => item.id === p.id);
+        return cartItem ? { ...p, stock: p.stock - cartItem.qty } : p;
       });
       setProducts(updatedProducts);
       setCart([]);
       setAmountPaid('');
-    }
+      notify("Transaksi Berhasil!", "success");
+    });
   };
 
   const total = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
@@ -685,7 +711,19 @@ const POSView = ({ products, setProducts, setTransactions, setOrders }) => {
                 </div>
                 <h4 className="font-semibold text-sm text-slate-800 line-clamp-2 leading-tight mb-auto">{product.name}</h4>
                 <div className="mt-3">
-                  <p className="text-emerald-600 font-bold text-sm">{formatRupiah(product.price)}</p>
+                  <div className="flex flex-col">
+                    {product.discount > 0 && (
+                      <span className="text-[10px] text-rose-400 line-through">{formatRupiah(product.price)}</span>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <p className="text-emerald-600 font-bold text-sm">
+                        {formatRupiah(product.price * (1 - (product.discount || 0) / 100))}
+                      </p>
+                      {product.discount > 0 && (
+                        <span className="text-[10px] bg-rose-50 text-rose-600 px-1 rounded font-bold">-{product.discount}%</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </button>
             ))}
@@ -794,7 +832,7 @@ const POSView = ({ products, setProducts, setTransactions, setOrders }) => {
 };
 
 // 5. Category View (Functional)
-const CategoryView = ({ categories, setCategories }) => {
+const CategoryView = ({ categories, setCategories, notify, askConfirm }) => {
   const [newCat, setNewCat] = useState("");
   const [subCat, setSubCat] = useState("");
 
@@ -805,7 +843,10 @@ const CategoryView = ({ categories, setCategories }) => {
   };
 
   const handleDelete = (id) => {
-    if (confirm("Hapus kategori ini?")) setCategories(categories.filter(c => c.id !== id));
+    askConfirm("Hapus kategori ini?", () => {
+      setCategories(categories.filter(c => c.id !== id));
+      notify("Kategori berhasil dihapus", "success");
+    });
   };
 
   return (
@@ -852,7 +893,7 @@ const CategoryView = ({ categories, setCategories }) => {
 };
 
 // 6. Promo View (Functional)
-const PromoView = ({ promos, setPromos }) => {
+const PromoView = ({ promos, setPromos, notify }) => {
   const [code, setCode] = useState("");
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
@@ -912,7 +953,7 @@ const PromoView = ({ promos, setPromos }) => {
                 <td className="px-6 py-4 text-slate-500">{promo.desc}</td>
                 <td className="px-6 py-4 font-mono">{promo.value ? formatRupiah(promo.value) : '-'}</td>
                 <td className="px-6 py-4">
-                  <button onClick={() => togglePromo(promo.id)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${promo.active ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                  <button onClick={() => { togglePromo(promo.id); notify(`Promo ${promo.active ? 'dinonaktifkan' : 'diaktifkan'}`, "info"); }} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${promo.active ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                     <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${promo.active ? 'translate-x-5' : 'translate-x-1'}`} />
                   </button>
                 </td>
@@ -929,7 +970,7 @@ const PromoView = ({ promos, setPromos }) => {
 };
 
 // 7. Order View (Functional)
-const OrderView = ({ orders, setOrders }) => {
+const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -944,9 +985,10 @@ const OrderView = ({ orders, setOrders }) => {
   };
 
   const handleApproveOrder = (id) => {
-    if (confirm("Setujui pesanan ini untuk diproses?")) {
+    askConfirm("Setujui pesanan ini untuk diproses?", () => {
       updateStatus(id, "Process");
-    }
+      notify("Pesanan disetujui", "success");
+    });
   };
 
   const handleApprovePayment = (id) => {
@@ -1072,7 +1114,7 @@ const OrderView = ({ orders, setOrders }) => {
                       {/* Dibatalkan */}
                       {['Pending', 'Draft', 'Process', 'Paid'].includes(order.status) && (
                         <button
-                          onClick={() => { if (confirm("Batalkan pesanan ini?")) updateStatus(order.id, 'Batal'); }}
+                          onClick={() => { askConfirm("Batalkan pesanan ini?", () => { updateStatus(order.id, 'Batal'); notify("Pesanan dibatalkan", "info"); }); }}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100"
                           title="Dibatalkan"
                         >
@@ -1159,12 +1201,12 @@ const OrderView = ({ orders, setOrders }) => {
 };
 
 // 8. Finance View (Updated with Transaction Form)
-const FinanceView = ({ transactions, setTransactions }) => {
+const FinanceView = ({ transactions, setTransactions, notify }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [newTrx, setNewTrx] = useState({ type: 'Keluar', amount: '', category: '', note: '', date: new Date().toISOString().split('T')[0] });
 
   const handleAddTrx = () => {
-    if (!newTrx.amount || !newTrx.category || !newTrx.note) return alert("Mohon lengkapi semua data transaksi");
+    if (!newTrx.amount || !newTrx.category || !newTrx.note) return notify("Mohon lengkapi semua data transaksi", "error");
 
     const trx = {
       id: `TRX-${Date.now()}`,
@@ -1482,7 +1524,7 @@ const SettingsView = () => (
 );
 
 // 12. Payment Options View (NEW)
-const PaymentOptionsView = ({ accounts, setAccounts }) => {
+const PaymentOptionsView = ({ accounts, setAccounts, askConfirm, notify }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [newAcc, setNewAcc] = useState({ bankName: '', accountNumber: '', holderName: '' });
 
@@ -1494,7 +1536,10 @@ const PaymentOptionsView = ({ accounts, setAccounts }) => {
   };
 
   const handleDelete = (id) => {
-    if (confirm("Hapus opsi pembayaran ini?")) setAccounts(accounts.filter(a => a.id !== id));
+    askConfirm("Hapus opsi pembayaran ini?", () => {
+      setAccounts(accounts.filter(a => a.id !== id));
+      notify("Opsi pembayaran dihapus", "success");
+    });
   };
 
   return (
@@ -1537,7 +1582,7 @@ const PaymentOptionsView = ({ accounts, setAccounts }) => {
 };
 
 // 13. Purchase View (NEW)
-const PurchaseView = ({ purchases, setPurchases, products, setProducts }) => {
+const PurchaseView = ({ purchases, setPurchases, products, setProducts, notify }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [newPurchase, setNewPurchase] = useState({ productId: '', supplier: '', qty: '', unitCost: '' });
 
@@ -1565,6 +1610,7 @@ const PurchaseView = ({ purchases, setPurchases, products, setProducts }) => {
     // Update Product Stock
     setProducts(products.map(p => p.id === product.id ? { ...p, stock: p.stock + qty } : p));
 
+    notify("Pembelian berhasil dicatat & Stok diperbarui", "success");
     setNewPurchase({ productId: '', supplier: '', qty: '', unitCost: '' });
     setIsFormOpen(false);
   };
@@ -1791,23 +1837,28 @@ const App = () => {
   const [customers, setCustomers] = useState(INITIAL_CUSTOMERS);
   const [paymentAccounts, setPaymentAccounts] = useState(INITIAL_PAYMENT_ACCOUNTS);
   const [purchases, setPurchases] = useState(INITIAL_PURCHASES);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
+
+  const notify = (message, type = 'success') => setToast({ show: true, message, type });
+  const askConfirm = (message, onConfirm) => setConfirmModal({ show: true, message, onConfirm });
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <DashboardView products={products} orders={orders} transactions={transactions} users={users} />;
-      case 'products': return <ProductView products={products} setProducts={setProducts} categories={categories} />;
-      case 'pos': return <POSView products={products} setProducts={setProducts} setTransactions={setTransactions} setOrders={setOrders} />;
-      case 'categories': return <CategoryView categories={categories} setCategories={setCategories} />;
-      case 'promos': return <PromoView promos={promos} setPromos={setPromos} />;
-      case 'orders': return <OrderView orders={orders} setOrders={setOrders} />;
-      case 'finance': return <FinanceView transactions={transactions} setTransactions={setTransactions} />;
-      case 'users': return <UserView users={users} setUsers={setUsers} />;
+      case 'products': return <ProductView products={products} setProducts={setProducts} categories={categories} notify={notify} askConfirm={askConfirm} />;
+      case 'pos': return <POSView products={products} setProducts={setProducts} setTransactions={setTransactions} setOrders={setOrders} notify={notify} askConfirm={askConfirm} />;
+      case 'categories': return <CategoryView categories={categories} setCategories={setCategories} notify={notify} askConfirm={askConfirm} />;
+      case 'promos': return <PromoView promos={promos} setPromos={setPromos} notify={notify} />;
+      case 'orders': return <OrderView orders={orders} setOrders={setOrders} notify={notify} askConfirm={askConfirm} />;
+      case 'finance': return <FinanceView transactions={transactions} setTransactions={setTransactions} notify={notify} />;
+      case 'users': return <UserView users={users} setUsers={setUsers} notify={notify} />;
       case 'customers': return <CustomerView customers={customers} />;
-      case 'purchase': return <PurchaseView purchases={purchases} setPurchases={setPurchases} products={products} setProducts={setProducts} />;
+      case 'purchase': return <PurchaseView purchases={purchases} setPurchases={setPurchases} products={products} setProducts={setProducts} notify={notify} />;
       case 'marketplace-homepage': return <MarketplaceContentView />;
       case 'delivery-schedule': return <DeliveryScheduleView />;
       case 'settings': return <SettingsView />;
-      case 'payment-options': return <PaymentOptionsView accounts={paymentAccounts} setAccounts={setPaymentAccounts} />;
+      case 'payment-options': return <PaymentOptionsView accounts={paymentAccounts} setAccounts={setPaymentAccounts} askConfirm={askConfirm} />;
       default: return <DashboardView products={products} orders={orders} transactions={transactions} users={users} />;
     }
   };
@@ -1816,12 +1867,9 @@ const App = () => {
     <>
       <style>{customStyles}</style>
       <div className="flex min-h-screen bg-slate-50/50 font-sans text-slate-900 selection:bg-emerald-100 selection:text-emerald-900">
-
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
         <div className="flex-1 flex flex-col md:ml-72 transition-all duration-300">
-
-          {/* Modern Header */}
           <header className="h-20 glass-effect border-b border-slate-200/60 flex items-center justify-between px-8 sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden text-slate-600 hover:bg-slate-100 p-2 rounded-lg">
@@ -1831,6 +1879,7 @@ const App = () => {
                 {activeTab === 'pos' ? 'Point of Sale' : activeTab.charAt(0).toUpperCase() + activeTab.slice(1).replace('-', ' ')}
               </h1>
             </div>
+
             <div className="flex items-center gap-6">
               <div className="relative hidden md:block">
                 <input className="bg-slate-100 border-none rounded-full py-2 pl-4 pr-10 text-sm focus:ring-2 focus:ring-emerald-500 w-64 transition-all" placeholder="Pencarian global..." />
@@ -1856,8 +1905,16 @@ const App = () => {
           <main className="flex-1 p-8 overflow-x-hidden">
             {renderContent()}
           </main>
-
         </div>
+
+        {toast.show && <Toast message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, show: false })} />}
+        {confirmModal.show && (
+          <ConfirmationModal
+            message={confirmModal.message}
+            onCancel={() => setConfirmModal({ show: false, message: '', onConfirm: null })}
+            onConfirm={() => { confirmModal.onConfirm(); setConfirmModal({ show: false, message: '', onConfirm: null }); }}
+          />
+        )}
       </div>
     </>
   );
