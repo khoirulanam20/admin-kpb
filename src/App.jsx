@@ -5,7 +5,7 @@ import {
   Plus, Search, Filter, Printer, FileText,
   TrendingUp, TrendingDown, Bell, Truck,
   CheckCircle, AlertCircle, ShoppingBag, UserCheck,
-  List, Tag, Trash2, Edit, Save, XCircle, ChevronRight, MoreHorizontal, Phone, MapPin, Calendar, Wallet,
+  List, Tag, Trash2, Edit, Save, XCircle, ChevronRight, ChevronDown, MoreHorizontal, Phone, MapPin, Calendar, Wallet,
   Eye, Check, Image as ImageIcon, Globe, History
 } from 'lucide-react';
 
@@ -63,7 +63,7 @@ const INITIAL_ORDERS = [
     id: "INV-20231001",
     customer: "Budi Santoso",
     role: "Member",
-    date: "2023-10-25",
+    date: "2026-01-25",
     deliveryDay: "Senin",
     total: 150000,
     status: "Done",
@@ -76,10 +76,10 @@ const INITIAL_ORDERS = [
     paymentProof: "https://via.placeholder.com/300x400?text=Bukti+Transfer+Budi"
   },
   {
-    id: "INV-20231002",
+    id: "INV-20260126",
     customer: "Warung Bu Siti",
     role: "Kepala Dapur",
-    date: "2023-10-26",
+    date: "2026-01-26",
     deliveryDay: "Selasa",
     total: 1200000,
     status: "Shipped",
@@ -91,10 +91,10 @@ const INITIAL_ORDERS = [
     ]
   },
   {
-    id: "INV-20231003",
+    id: "INV-20260126",
     customer: "Ahmad Dani",
     role: "Guest",
-    date: "2023-10-26",
+    date: "2026-01-26",
     deliveryDay: "Rabu",
     total: 65000,
     status: "Process",
@@ -106,10 +106,10 @@ const INITIAL_ORDERS = [
     paymentProof: "https://via.placeholder.com/300x400?text=Bukti+Transfer+Ahmad"
   },
   {
-    id: "INV-20231004",
+    id: "INV-20260127",
     customer: "Catering Sejahtera",
     role: "Kepala Dapur",
-    date: "2023-10-27",
+    date: "2026-01-27",
     deliveryDay: "Kamis",
     total: 3500000,
     status: "Pending",
@@ -861,6 +861,9 @@ const POSView = ({ products, setProducts, setTransactions, setOrders, notify, as
 // --- REUSABLE COMPONENTS ---
 
 const PeriodFilter = ({ period, setPeriod, date, setDate }) => {
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => currentYear - i); // Current year and 9 years back
+
   return (
     <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
       <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
@@ -879,13 +882,28 @@ const PeriodFilter = ({ period, setPeriod, date, setDate }) => {
           ))}
         </div>
         <div className="relative flex-1">
-          <input
-            type={period === 'HARI' ? 'date' : period === 'BULAN' ? 'month' : 'number'}
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            placeholder={period === 'TAHUN' ? 'Tulis Tahun (ex: 2024)' : ''}
-            className="w-full pl-4 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700"
-          />
+          {period === 'TAHUN' ? (
+            <div className="relative">
+              <select
+                value={date.includes('-') ? date.split('-')[0] : date}
+                onChange={e => setDate(e.target.value)}
+                className="w-full pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700 appearance-none cursor-pointer"
+              >
+                <option value="">Pilih Tahun</option>
+                {years.map(year => (
+                  <option key={year} value={year.toString()}>{year}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+            </div>
+          ) : (
+            <input
+              type={period === 'HARI' ? 'date' : 'month'}
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="w-full pl-4 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1538,7 +1556,33 @@ const UserView = ({ users, setUsers }) => {
 };
 
 // 10. Customer View (NEW & Functional)
-const CustomerView = ({ customers }) => {
+const CustomerView = ({ customers, setCustomers, notify }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [newCustomer, setNewCustomer] = useState({ name: '', type: 'Member', phone: '' });
+
+  const handleAddCustomer = () => {
+    if (!newCustomer.name || !newCustomer.phone) {
+      notify("Nama dan Nomor HP wajib diisi!", "error");
+      return;
+    }
+    const newEntry = {
+      id: Date.now(),
+      ...newCustomer,
+      spending: 0,
+      joinDate: new Date().toISOString().split('T')[0]
+    };
+    setCustomers([newEntry, ...customers]);
+    setNewCustomer({ name: '', type: 'Member', phone: '' });
+    setIsModalOpen(false);
+    notify("Member baru berhasil ditambahkan!", "success");
+  };
+
+  const filteredCustomers = customers.filter(c =>
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.phone.includes(searchTerm)
+  );
+
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       <h2 className="text-2xl font-bold text-slate-800">Data Pelanggan</h2>
@@ -1552,16 +1596,44 @@ const CustomerView = ({ customers }) => {
             <h3 className="text-2xl font-bold text-slate-800">{customers.length}</h3>
           </div>
         </div>
-        {/* More stat cards could go here */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+            <UserCheck size={24} />
+          </div>
+          <div>
+            <p className="text-slate-500 text-sm">Member Aktif</p>
+            <h3 className="text-2xl font-bold text-slate-800">{customers.filter(c => c.type === 'Member').length}</h3>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <p className="text-slate-500 text-sm">Pertumbuhan</p>
+            <h3 className="text-2xl font-bold text-slate-800">+12%</h3>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between md:items-center gap-4">
           <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input type="text" placeholder="Cari pelanggan..." className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" />
+            <input
+              type="text"
+              placeholder="Cari pelanggan..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+            />
           </div>
-          <button className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-md transition-colors flex items-center gap-2"><Plus size={16} /> Member Baru</button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-md transition-colors flex items-center gap-2"
+          >
+            <Plus size={16} /> Member Baru
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
@@ -1576,32 +1648,124 @@ const CustomerView = ({ customers }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {customers.map((cust) => (
-                <tr key={cust.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-slate-800">{cust.name}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${cust.type === 'Kepala Dapur' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                      {cust.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 flex items-center gap-2">
-                    <Phone size={14} className="text-slate-400" /> {cust.phone}
-                  </td>
-                  <td className="px-6 py-4 font-bold text-emerald-600">{formatRupiah(cust.spending)}</td>
-                  <td className="px-6 py-4 text-slate-500 text-xs">{cust.joinDate}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-slate-400 hover:text-emerald-600 transition-colors"><MoreHorizontal size={18} /></button>
-                  </td>
+              {filteredCustomers.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-10 text-center text-slate-400">Data tidak ditemukan</td>
                 </tr>
-              ))}
+              ) : (
+                filteredCustomers.map((cust) => (
+                  <tr key={cust.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-slate-800">{cust.name}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${cust.type === 'Kepala Dapur' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                        {cust.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 flex items-center gap-2">
+                      <Phone size={14} className="text-slate-400" /> {cust.phone}
+                    </td>
+                    <td className="px-6 py-4 font-bold text-emerald-600">{formatRupiah(cust.spending)}</td>
+                    <td className="px-6 py-4 text-slate-500 text-xs">{cust.joinDate}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button className="text-slate-400 hover:text-emerald-600 transition-colors"><MoreHorizontal size={18} /></button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Add Member Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in border border-slate-100">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Tambah Member Baru</h3>
+                <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mt-1">Informasi Dasar Pelanggan</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="bg-white p-2 rounded-xl text-slate-400 hover:text-slate-600 shadow-sm transition-all border border-slate-200">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span> Nama Lengkap
+                </label>
+                <div className="relative">
+                  <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    value={newCustomer.name}
+                    onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                    placeholder="Contoh: Budi Santoso"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span> Nomor Handphone
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    value={newCustomer.phone}
+                    onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                    placeholder="Contoh: 0812XXXXXXXX"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full"></span> Tipe Pelanggan
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {['Member', 'Kepala Dapur'].map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setNewCustomer({ ...newCustomer, type })}
+                      className={`py-3 rounded-xl text-sm font-bold transition-all border ${newCustomer.type === type
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 py-3.5 rounded-2xl font-bold text-slate-600 hover:bg-slate-200 transition-all border border-slate-200 bg-white"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleAddCustomer}
+                className="flex-1 py-3.5 rounded-2xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
+              >
+                <Plus size={18} /> Simpan Member
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  )
+  );
 };
 
 // 11. Invoice Modal (NEW)
@@ -2250,7 +2414,7 @@ const App = () => {
       case 'orders': return <OrderView orders={orders} setOrders={setOrders} notify={notify} askConfirm={askConfirm} />;
       case 'finance': return <FinanceView transactions={transactions} setTransactions={setTransactions} notify={notify} />;
       case 'users': return <UserView users={users} setUsers={setUsers} notify={notify} />;
-      case 'customers': return <CustomerView customers={customers} />;
+      case 'customers': return <CustomerView customers={customers} setCustomers={setCustomers} notify={notify} />;
       case 'purchase': return <PurchaseView purchases={purchases} setPurchases={setPurchases} products={products} setProducts={setProducts} notify={notify} />;
       case 'marketplace-homepage': return <MarketplaceContentView />;
       case 'delivery-schedule': return <DeliveryScheduleView />;
