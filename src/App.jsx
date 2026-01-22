@@ -136,7 +136,7 @@ const INITIAL_PAYMENT_ACCOUNTS = [
 ];
 
 const INITIAL_USERS = [
-  { id: 1, name: "Hartono", email: "hartono@koperasi.id", role: "Owner", status: "Active" },
+  { id: 1, name: "Billy", email: "billy@koperasi.id", role: "Owner", status: "Active" },
   { id: 2, name: "Siti Aminah", email: "admin@koperasi.id", role: "Admin", status: "Active" },
   { id: 3, name: "Budi Bendahara", email: "finance@koperasi.id", role: "Bendahara", status: "Active" },
   { id: 4, name: "Joko Gudang", email: "logistik@koperasi.id", role: "Staff", status: "Inactive" },
@@ -201,12 +201,13 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggleSidebar }) => {
         { id: 'pos', label: 'Kasir (POS)', icon: ShoppingBag },
         { id: 'pos-history', label: 'Riwayat POS', icon: History },
         { id: 'purchase', label: 'Pembelian (Stok)', icon: Truck },
+        { id: 'orders', label: 'Manajemen Pesanan', icon: ShoppingCart },
       ]
     },
     {
       section: 'ORDER & LOGISTIK', items: [
-        { id: 'orders', label: 'Manajemen Pesanan', icon: ShoppingCart },
-        { id: 'delivery-schedule', label: 'Jadwal Pengiriman', icon: Calendar },
+        // { id: 'orders', label: 'Manajemen Pesanan', icon: ShoppingCart },
+        // { id: 'delivery-schedule', label: 'Jadwal Pengiriman', icon: Calendar },
       ]
     },
     {
@@ -298,11 +299,10 @@ const DashboardView = ({ products, orders, transactions, users }) => {
     <div className="space-y-8 animate-fade-in max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800">{greeting}, Pak Hartono 👋</h2>
+          <h2 className="text-3xl font-bold text-slate-800">{greeting}, Pak Billy 👋</h2>
           <p className="text-slate-500 mt-1">Berikut adalah ringkasan performa koperasi hari ini.</p>
         </div>
         <div className="flex gap-2">
-          <button className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">Download Laporan</button>
           <button className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200">Refresh Data</button>
         </div>
       </div>
@@ -2652,7 +2652,7 @@ const App = () => {
               <div className="h-8 w-[1px] bg-slate-200 hidden sm:block"></div>
               <div className="flex items-center gap-3 pl-2">
                 <div className="text-right hidden sm:block leading-tight">
-                  <p className="text-sm font-bold text-slate-800">Hartono</p>
+                  <p className="text-sm font-bold text-slate-800">Billy</p>
                   <p className="text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-0.5">Owner</p>
                 </div>
                 <div className="w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-900 rounded-full flex items-center justify-center text-white font-bold border-2 border-white shadow-md cursor-pointer hover:scale-105 transition-transform">
