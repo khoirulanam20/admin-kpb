@@ -116,6 +116,7 @@ const INITIAL_ORDERS = [
     status: "Pending",
     paymentStatus: "Pasca Bayar",
     method: "Tagihan H+2",
+    notes: "Tolong pastikan beras tidak ada kutu, packing rapi.",
     items: [
       { id: 2, name: "Minyak Goreng Sunco 2L", price: 38000, qty: 50 },
       { id: 5, name: "Telur Ayam Negeri (Tray)", price: 55000, qty: 20 }
@@ -236,7 +237,7 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggleSidebar }) => {
   return (
     <>
       {/* Mobile Overlay */}
-      {isOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden" onClick={toggleSidebar}></div>}
+      {isOpen && <div className="fixed inset-0 bg-white/10 backdrop-blur-md z-40 md:hidden" onClick={toggleSidebar}></div>}
 
       <aside className={`fixed left-0 top-0 z-50 h-screen w-72 bg-slate-900 text-slate-300 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 border-r border-slate-800`}>
         <div className="flex h-20 items-center px-8 border-b border-slate-800">
@@ -687,7 +688,7 @@ const ProductView = ({ products, setProducts, categories, notify, askConfirm }) 
 
       {/* Edit Modal */}
       {editingProduct && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-md z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="text-xl font-bold text-slate-800">Edit Produk: {editingProduct.name}</h3>
@@ -888,6 +889,7 @@ const POSView = ({ products, setProducts, setTransactions, setOrders, notify, as
         id: `TRX-${Date.now().toString().slice(-4)}`,
         type: "Masuk",
         category: "Penjualan",
+        source: "POS",
         amount: total,
         date: new Date().toISOString().split('T')[0],
         status: "Selesai",
@@ -1279,14 +1281,15 @@ const PromoView = ({ promos, setPromos, notify }) => {
 };
 
 // 7. Order View (Functional)
-const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
+const OrderView = ({ orders, setOrders, notify, askConfirm, setTransactions }) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState("HARI");
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const filteredOrders = filterDataByPeriod(orders, filterPeriod, filterDate);
+  const marketplaceOrders = orders.filter(o => o.source !== 'POS' && o.customer !== 'Walk-in Customer');
+  const filteredOrders = filterDataByPeriod(marketplaceOrders, filterPeriod, filterDate);
 
   const updateStatus = (id, newStatus) => {
     setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
@@ -1303,8 +1306,22 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
     });
   };
 
-  const handleApprovePayment = (id) => {
-    updatePaymentStatus(id, "Lunas");
+  const handleApprovePayment = (order) => {
+    updatePaymentStatus(order.id, "Lunas");
+
+    // Add transaction to finance
+    setTransactions(prev => [{
+      id: `TRX-${Date.now().toString().slice(-4)}`,
+      type: "Masuk",
+      category: "Penjualan",
+      source: "Marketplace",
+      amount: order.total,
+      date: new Date().toISOString().split('T')[0],
+      status: "Selesai",
+      method: order.method,
+      note: `Pemesanan ${order.id} (${order.customer})`
+    }, ...prev]);
+
     setShowPayment(false);
   };
 
@@ -1337,7 +1354,6 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
               <tr>
                 <th className="px-6 py-4 text-center">ID / Tgl</th>
                 <th className="px-6 py-4">Pelanggan</th>
-                <th className="px-6 py-4">Hari Kirim</th>
                 <th className="px-6 py-4">Total</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Pembayaran</th>
@@ -1355,9 +1371,6 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
                     <div className="font-medium text-slate-800">{order.customer}</div>
                     <div className="text-xs text-slate-400">{order.role}</div>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-bold">{order.deliveryDay || '-'}</span>
-                  </td>
                   <td className="px-6 py-4 font-bold text-slate-700">{formatRupiah(order.total)}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>{order.status}</span>
@@ -1370,6 +1383,7 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex justify-center gap-1">
+                      {/* Detail */}
                       <button
                         onClick={() => { setSelectedOrder(order); setShowDetail(true); }}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
@@ -1389,41 +1403,62 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
                         </button>
                       )}
 
-                      {/* Approve Pembayaran */}
+                      {/* Approve Pembayaran 
+                          Sequence 1 (COD/Now): Pay -> Ship
+                          Sequence 2 (H+): Ship -> Pay
+                      */}
                       {order.paymentStatus !== 'Lunas' && (
                         <button
                           onClick={() => { setSelectedOrder(order); setShowPayment(true); }}
-                          className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100"
+                          className={`p-2 rounded-lg transition-colors border border-transparent ${(order.method?.includes('Tagihan') && order.status !== 'Shipped')
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-amber-600 hover:bg-amber-50 hover:border-amber-100'
+                            }`}
                           title="Approve Pembayaran"
+                          disabled={order.method?.includes('Tagihan') && order.status !== 'Shipped'}
                         >
                           <CreditCard size={16} />
                         </button>
                       )}
 
-                      {/* Dikirim */}
-                      {(order.status === 'Process' || (order.status === 'Paid' && order.paymentStatus === 'Lunas')) && (
+                      {/* Dikirim (Ship)
+                          Sequence 1 (COD/Now): Only if Lunas
+                          Sequence 2 (H+): Anytime after Process
+                      */}
+                      {(order.status === 'Process' || order.status === 'Paid') && (
                         <button
                           onClick={() => updateStatus(order.id, 'Shipped')}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                          className={`p-2 rounded-lg transition-colors border border-transparent ${(!order.method?.includes('Tagihan') && order.paymentStatus !== 'Lunas')
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-blue-600 hover:bg-blue-50 hover:border-blue-100'
+                            }`}
                           title="Dikirim"
+                          disabled={!order.method?.includes('Tagihan') && order.paymentStatus !== 'Lunas'}
                         >
                           <Truck size={16} />
                         </button>
                       )}
 
-                      {/* Selesai */}
+                      {/* Selesai (Done)
+                          Sequence 1: Anytime after Shipped (Lunas already checked)
+                          Sequence 2: Only if Shipped AND Lunas
+                      */}
                       {order.status === 'Shipped' && (
                         <button
                           onClick={() => updateStatus(order.id, 'Done')}
-                          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                          className={`p-2 rounded-lg transition-colors border border-transparent ${(order.method?.includes('Tagihan') && order.paymentStatus !== 'Lunas')
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-emerald-600 hover:bg-emerald-50 hover:border-emerald-100'
+                            }`}
                           title="Selesai"
+                          disabled={order.method?.includes('Tagihan') && order.paymentStatus !== 'Lunas'}
                         >
                           <CheckCircle size={16} />
                         </button>
                       )}
 
                       {/* Dibatalkan */}
-                      {['Pending', 'Draft', 'Process', 'Paid'].includes(order.status) && (
+                      {['Pending', 'Draft', 'Process', 'Paid', 'Shipped'].includes(order.status) && (
                         <button
                           onClick={() => { askConfirm("Batalkan pesanan ini?", () => { updateStatus(order.id, 'Batal'); notify("Pesanan dibatalkan", "info"); }); }}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100"
@@ -1443,7 +1478,7 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
 
       {/* Detail Modal */}
       {showDetail && selectedOrder && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-md z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
@@ -1453,6 +1488,46 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
               <button onClick={() => setShowDetail(false)} className="text-slate-400 hover:text-slate-600 p-2"><X size={24} /></button>
             </div>
             <div className="p-6">
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div className="space-y-3">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Informasi Pembayaran</p>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Metode</span>
+                        <span className="font-bold text-slate-700">{selectedOrder.method?.includes('Tagihan') ? 'Transfer' : (selectedOrder.method || 'Cash')}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Keterangan</span>
+                        <span className="font-bold text-emerald-600">{selectedOrder.method?.includes('Tagihan') ? selectedOrder.method.replace('Tagihan ', '') : 'Bayar Sekarang'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Jadwal Pengiriman</p>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Hari</span>
+                        <span className="font-bold text-blue-600">{selectedOrder.deliveryDay || '-'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Jam</span>
+                        <span className="font-bold text-slate-700">{selectedOrder.deliveryTime || '08:00 - 10:00'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {selectedOrder.notes && (
+                <div className="mb-6 bg-amber-50 border border-amber-100 p-4 rounded-2xl">
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">Catatan Pesanan</p>
+                  <p className="text-sm text-amber-900 font-medium">{selectedOrder.notes}</p>
+                </div>
+              )}
+
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold">
                   <tr>
@@ -1486,7 +1561,7 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
 
       {/* Payment Approval Modal */}
       {showPayment && selectedOrder && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-md z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-amber-50">
               <h3 className="text-xl font-bold text-amber-900">Konfirmasi Pembayaran</h3>
@@ -1498,7 +1573,7 @@ const OrderView = ({ orders, setOrders, notify, askConfirm }) => {
                 <img src={selectedOrder.paymentProof} alt="Bukti Bayar" className="w-full h-full object-cover" />
               </div>
               <button
-                onClick={() => handleApprovePayment(selectedOrder.id)}
+                onClick={() => handleApprovePayment(selectedOrder)}
                 className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 shadow-lg shadow-emerald-200"
               >
                 <Check size={20} /> Konfirmasi Lunas
@@ -1654,6 +1729,7 @@ const FinanceView = ({ transactions, setTransactions, notify }) => {
               <tr>
                 <th className="px-6 py-4">Tanggal</th>
                 <th className="px-6 py-4">Kategori</th>
+                <th className="px-6 py-4 text-center">Sumber</th>
                 <th className="px-6 py-4">Keterangan</th>
                 <th className="px-6 py-4 text-right">Jumlah</th>
               </tr>
@@ -1663,6 +1739,11 @@ const FinanceView = ({ transactions, setTransactions, notify }) => {
                 <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap font-mono text-xs">{trx.date}</td>
                   <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-medium ${trx.type === 'Masuk' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{trx.category}</span></td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${trx.source === 'POS' ? 'bg-blue-50 text-blue-600' : trx.source === 'Marketplace' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-600'}`}>
+                      {trx.source || 'Manual'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-slate-800">{trx.note}</td>
                   <td className={`px-6 py-4 font-bold text-right ${trx.type === 'Masuk' ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {trx.type === 'Masuk' ? '+' : '-'} {formatRupiah(trx.amount)}
@@ -1880,7 +1961,7 @@ const CustomerView = ({ customers, setCustomers, notify }) => {
 
       {/* Add Member Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-md z-[110] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-fade-in border border-slate-100">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
@@ -1976,7 +2057,7 @@ const InvoiceModal = ({ order, isOpen, onClose, formatRupiah }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto print:bg-white print:p-0">
+    <div className="fixed inset-0 bg-white/10 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto print:bg-white print:p-0">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-fade-in print:shadow-none print:w-full print:max-w-none">
         <div className="p-8 space-y-6">
           {/* Header */}
@@ -2184,7 +2265,7 @@ const POSHistoryView = ({ orders, setOrders, formatRupiah, getStatusColor, onPri
       </div>
 
       {isPayModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-white/10 backdrop-blur-md z-[110] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in">
             <div className="p-6 border-b border-slate-100">
               <h3 className="text-xl font-bold text-slate-800">Pelunasan Hutang</h3>
@@ -2487,7 +2568,7 @@ const Toast = ({ message, type, onClose }) => {
 // 15. Confirmation Modal
 const ConfirmationModal = ({ message, onConfirm, onCancel }) => {
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-white/10 backdrop-blur-md animate-fade-in">
       <div className="bg-white rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100">
         <div className="p-8 text-center">
           <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
@@ -2610,7 +2691,7 @@ const App = () => {
       case 'pos-history': return <POSHistoryView orders={orders} setOrders={setOrders} formatRupiah={formatRupiah} getStatusColor={getStatusColor} onPrintInvoice={(order) => setInvoiceToPrint(order)} />;
       case 'categories': return <CategoryView categories={categories} setCategories={setCategories} notify={notify} askConfirm={askConfirm} />;
       case 'promos': return <PromoView promos={promos} setPromos={setPromos} notify={notify} />;
-      case 'orders': return <OrderView orders={orders} setOrders={setOrders} notify={notify} askConfirm={askConfirm} />;
+      case 'orders': return <OrderView orders={orders} setOrders={setOrders} notify={notify} askConfirm={askConfirm} setTransactions={setTransactions} />;
       case 'finance': return <FinanceView transactions={transactions} setTransactions={setTransactions} notify={notify} />;
       case 'users': return <UserView users={users} setUsers={setUsers} notify={notify} />;
       case 'customers': return <CustomerView customers={customers} setCustomers={setCustomers} notify={notify} />;
