@@ -204,12 +204,12 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggleSidebar }) => {
         { id: 'orders', label: 'Manajemen Pesanan', icon: ShoppingCart },
       ]
     },
-    {
-      section: 'ORDER & LOGISTIK', items: [
-        // { id: 'orders', label: 'Manajemen Pesanan', icon: ShoppingCart },
-        // { id: 'delivery-schedule', label: 'Jadwal Pengiriman', icon: Calendar },
-      ]
-    },
+    // {
+    //   section: 'ORDER & LOGISTIK', items: [
+    //     // { id: 'orders', label: 'Manajemen Pesanan', icon: ShoppingCart },
+    //     // { id: 'delivery-schedule', label: 'Jadwal Pengiriman', icon: Calendar },
+    //   ]
+    // },
     {
       section: 'MARKETPLACE', items: [
         { id: 'marketplace-homepage', label: 'Konten Homepage', icon: Globe },
