@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   LayoutDashboard, ShoppingCart, Package, Users,
   CreditCard, Settings, LogOut, Menu, X,
@@ -6,7 +7,7 @@ import {
   TrendingUp, TrendingDown, Bell, Truck,
   CheckCircle, AlertCircle, ShoppingBag, UserCheck,
   List, Tag, Trash2, Edit, Save, XCircle, ChevronRight, ChevronDown, MoreHorizontal, Phone, MapPin, Calendar, Wallet,
-  Eye, Check, Image as ImageIcon, Globe, History
+  Eye, Check, Image as ImageIcon, Globe, History, Download, Upload, FileSpreadsheet
 } from 'lucide-react';
 
 // --- STYLES FOR ANIMATIONS ---
@@ -217,7 +218,7 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, toggleSidebar }) => {
       section: 'INVENTORY', items: [
         { id: 'products', label: 'Produk', icon: Package },
         { id: 'categories', label: 'Kategori', icon: List },
-        { id: 'promos', label: 'Promo', icon: Tag },
+        // { id: 'promos', label: 'Promo', icon: Tag },
       ]
     },
     {
@@ -399,10 +400,119 @@ const ProductView = ({ products, setProducts, categories, notify, askConfirm }) 
   const [newProduct, setNewProduct] = useState({ name: '', price: '', discount: 0, stock: '', category: '', subCategory: '', sku: '' });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [selectedImportFile, setSelectedImportFile] = useState(null);
+  const [validationErrors, setValidationErrors] = useState([]);
+  const [isImportTested, setIsImportTested] = useState(false);
+  const [tempImportData, setTempImportData] = useState([]);
 
   const productCategories = categories.map(c => c.name);
   const subCategories = categories.find(c => c.name === newProduct.category)?.subCategories || [];
   const editSubCategories = categories.find(c => c.name === editingProduct?.category)?.subCategories || [];
+
+  const downloadTemplate = () => {
+    const template = [
+      {
+        'Nama Produk': 'Beras Premium 5kg',
+        'SKU / Kode': 'BRS-001',
+        'Kategori': 'Sembako',
+        'Sub Kategori': 'Beras',
+        'Harga Jual': 65000,
+        'Diskon (%)': 0,
+        'Stok Awal': 100
+      },
+      {
+        'Nama Produk': 'Minyak Goreng 2L',
+        'SKU / Kode': 'MNY-002',
+        'Kategori': 'Sembako',
+        'Sub Kategori': 'Minyak',
+        'Harga Jual': 38000,
+        'Diskon (%)': 0,
+        'Stok Awal': 50
+      },
+    ];
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "template_import_produk.xlsx");
+    notify("Template berhasil di-download", "success");
+  };
+
+  const testImportExcel = () => {
+    if (!selectedImportFile) return notify("Pilih file terlebih dahulu!", "error");
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+          setValidationErrors(["File kosong atau tidak terbaca"]);
+          return notify("File kosong!", "error");
+        }
+
+        const errors = [];
+        const requiredColumns = ['Nama Produk', 'Harga Jual', 'Stok Awal'];
+
+        // Check columns
+        const firstRow = data[0];
+        requiredColumns.forEach(col => {
+          if (!Object.keys(firstRow).includes(col)) {
+            errors.push(`Kolom "${col}" tidak ditemukan`);
+          }
+        });
+
+        // Check data types & values
+        data.forEach((item, idx) => {
+          if (!item['Nama Produk']) errors.push(`Baris ${idx + 1}: Nama Produk wajib diisi`);
+          if (isNaN(parseInt(item['Harga Jual']))) errors.push(`Baris ${idx + 1}: Harga Jual harus angka`);
+          if (item['Stok Awal'] !== undefined && isNaN(parseInt(item['Stok Awal']))) errors.push(`Baris ${idx + 1}: Stok Awal harus angka`);
+        });
+
+        if (errors.length > 0) {
+          setValidationErrors(errors);
+          setIsImportTested(false);
+          notify("Data tidak valid, periksa peringatan", "error");
+        } else {
+          setValidationErrors([]);
+          setIsImportTested(true);
+          setTempImportData(data);
+          notify("Data tervalidasi, siap di-import", "success");
+        }
+      } catch (error) {
+        notify("Gagal membaca file Excel", "error");
+      }
+    };
+    reader.readAsBinaryString(selectedImportFile);
+  };
+
+  const handleImportExcel = () => {
+    if (!isImportTested || tempImportData.length === 0) return notify("Tes data terlebih dahulu!", "error");
+
+    const importedProducts = tempImportData.map((item, index) => ({
+      id: Date.now() + index,
+      name: item['Nama Produk'] || 'Tanpa Nama',
+      sku: item['SKU / Kode'] || '',
+      category: item['Kategori'] || '',
+      subCategory: item['Sub Kategori'] || '',
+      price: parseInt(item['Harga Jual']) || 0,
+      discount: parseInt(item['Diskon (%)']) || 0,
+      stock: parseInt(item['Stok Awal']) || 0,
+      isActive: true
+    }));
+
+    setProducts([...products, ...importedProducts]);
+    notify(`${importedProducts.length} Produk berhasil di-import`, "success");
+    setIsImportModalOpen(false);
+    setSelectedImportFile(null);
+    setIsImportTested(false);
+    setValidationErrors([]);
+    setTempImportData([]);
+  };
 
   const handleAdd = () => {
     if (!newProduct.name || !newProduct.price) return notify("Nama dan Harga wajib diisi!", "error");
@@ -443,10 +553,16 @@ const ProductView = ({ products, setProducts, categories, notify, askConfirm }) 
           <h2 className="text-2xl font-bold text-slate-800">Katalog Produk</h2>
           <p className="text-slate-500 text-sm">Kelola stok dan harga produk koperasi.</p>
         </div>
-        <button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:-translate-y-0.5 transition-all flex items-center gap-2">
-          {isFormOpen ? <X size={18} /> : <Plus size={18} />}
-          {isFormOpen ? 'Tutup Form' : 'Tambah Produk'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setIsImportModalOpen(true)} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-medium hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
+            <Upload size={18} className="text-blue-600" />
+            Import Excel
+          </button>
+          <button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 hover:bg-emerald-700 hover:-translate-y-0.5 transition-all flex items-center gap-2">
+            {isFormOpen ? <X size={18} /> : <Plus size={18} />}
+            {isFormOpen ? 'Tutup Form' : 'Tambah Produk'}
+          </button>
+        </div>
       </div>
 
       {isFormOpen && (
@@ -610,6 +726,89 @@ const ProductView = ({ products, setProducts, categories, notify, askConfirm }) 
               <div className="col-span-2 flex justify-end gap-3 mt-4">
                 <button onClick={() => setEditingProduct(null)} className="px-6 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors">Batal</button>
                 <button onClick={handleUpdate} className="px-6 py-3 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all">Simpan Perubahan</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-slate-100 animate-fade-in">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <FileSpreadsheet className="text-emerald-500" /> Import Masal Produk
+              </h3>
+              <button onClick={() => { setIsImportModalOpen(false); setValidationErrors([]); setIsImportTested(false); }} className="text-slate-400 hover:text-slate-600 p-2"><X size={24} /></button>
+            </div>
+            <div className="p-8">
+              <div className="mb-6">
+                <p className="text-slate-600 text-sm mb-4">Gunakan template Excel kami untuk memastikan data ter-import dengan benar ke sistem.</p>
+                <button onClick={downloadTemplate} className="text-emerald-600 font-bold text-sm flex items-center gap-2 hover:underline">
+                  <Download size={16} /> Download Template Excel (.xlsx)
+                </button>
+              </div>
+
+              <div className="relative">
+                <label className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-2xl cursor-pointer transition-all
+                  ${selectedImportFile ? (validationErrors.length > 0 ? 'border-rose-400 bg-rose-50/30' : 'border-emerald-500 bg-emerald-50/30') : 'border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400'}`}>
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${selectedImportFile ? (validationErrors.length > 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600') : 'bg-white text-slate-400 shadow-sm'}`}>
+                      {selectedImportFile ? (validationErrors.length > 0 ? <AlertCircle size={20} /> : <Check size={20} />) : <Upload size={20} />}
+                    </div>
+                    {selectedImportFile ? (
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 truncate max-w-[200px]">{selectedImportFile.name}</p>
+                        <p className={`text-[10px] uppercase font-bold mt-1 ${validationErrors.length > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                          {validationErrors.length > 0 ? 'File bermasalah' : (isImportTested ? 'Tervalidasi' : 'File dipilih - Perlu Tes')}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-bold text-slate-800">Klik / Seret file Excel</p>
+                        <p className="text-[10px] text-slate-500 mt-1 uppercase">.xlsx atau .xls</p>
+                      </>
+                    )}
+                  </div>
+                  <input type="file" accept=".xlsx, .xls" className="hidden" onChange={(e) => { setSelectedImportFile(e.target.files[0]); setIsImportTested(false); setValidationErrors([]); }} />
+                </label>
+                {selectedImportFile && (
+                  <button onClick={() => { setSelectedImportFile(null); setIsImportTested(false); setValidationErrors([]); }} className="absolute -top-2 -right-2 bg-slate-800 text-white p-1 rounded-full shadow-lg hover:bg-rose-600 transition-colors">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {validationErrors.length > 0 && (
+                <div className="mt-4 p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                  <div className="flex gap-2 text-rose-600 mb-2">
+                    <AlertCircle size={16} />
+                    <span className="text-xs font-bold uppercase">Kesalahan Data:</span>
+                  </div>
+                  <ul className="text-[11px] text-rose-500 space-y-1 max-h-24 overflow-y-auto scrollbar-thin">
+                    {validationErrors.map((err, i) => <li key={i}>• {err}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <button
+                  onClick={testImportExcel}
+                  disabled={!selectedImportFile}
+                  className={`py-3 rounded-xl font-bold text-sm transition-all border-2
+                    ${selectedImportFile ? 'border-blue-600 text-blue-600 hover:bg-blue-50' : 'border-slate-200 text-slate-300 cursor-not-allowed'}`}
+                >
+                  {isImportTested ? 'Tes Ulang' : '1. Tes Data'}
+                </button>
+                <button
+                  onClick={handleImportExcel}
+                  disabled={!isImportTested}
+                  className={`py-3 rounded-xl font-bold text-sm text-white shadow-lg transition-all
+                    ${isImportTested ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-slate-300 shadow-none cursor-not-allowed'}`}
+                >
+                  2. Import ke Database
+                </button>
               </div>
             </div>
           </div>
